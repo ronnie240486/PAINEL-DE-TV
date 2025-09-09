@@ -1,17 +1,13 @@
 # Fase de build: como construir a aplicação
 [phases.build]
-# Comandos a serem executados:
-# 1. Instalar o Gradle se não estiver presente (não será necessário se já estiver no ambiente Nixpacks)
-# 2. Navegar para o diretório do projeto e rodar o comando de build do Gradle
+# Comandos a serem executados para construir a aplicação
 cmds = [
-  "wget https://services.gradle.org/distributions/gradle-8.0-bin.zip -O gradle.zip",
-  "unzip gradle.zip -d /opt",
-  "ln -s /opt/gradle-8.0/bin/gradle /usr/bin/gradle", # Linka o Gradle globalmente
-  "gradle build"  # Roda o comando de build do Gradle
+  "gradle build"  # Usa o Gradle instalado globalmente para construir o projeto
 ]
 
 # Fase de start: como iniciar a aplicação depois de construída
 [start]
-# Comando para iniciar a aplicação Ktor
+# Comando para executar a aplicação após a construção
 cmd = "java -jar build/libs/backend-kotlin-0.0.1.jar"
+
 
