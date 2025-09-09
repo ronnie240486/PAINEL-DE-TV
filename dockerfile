@@ -1,4 +1,4 @@
-# Use uma imagem base com OpenJDK (para rodar seu aplicativo Kotlin/Java)
+# Usar uma imagem base com OpenJDK (para rodar seu aplicativo Kotlin/Java)
 FROM openjdk:17-slim
 
 # Instalar Gradle no contêiner
@@ -14,15 +14,11 @@ WORKDIR /app
 # Copie todos os arquivos do diretório atual para dentro do contêiner
 COPY . .
 
-# Dê permissão de execução ao script gradlew, caso ele apareça ou se for necessário
-RUN chmod +x /app/gradlew
-
-# Execute o comando para construir a aplicação
+# Execute o comando Gradle para construir a aplicação
 RUN gradle build
 
 # Exponha a porta que a aplicação vai usar (geralmente 8080 no caso do Ktor)
 EXPOSE 8080
 
-# Comando para rodar a aplicação
-CMD ["java", "-jar", "build/libs/backend-kotlin.jar"]
-
+# Comando para rodar a aplicação Ktor (ajustado para a saída do Gradle)
+CMD ["java", "-jar", "build/libs/backend-kotlin-0.0.1.jar"]
