@@ -1,8 +1,9 @@
 # Fase de build: como construir a aplicação
 [phases.build]
-# 1. Navega para a pasta do backend
-# 2. Executa o comando de build do Gradle
-cmds = ["cd backend-kotlin && ./gradlew build"]
+# Comandos a serem executados:
+# 1. Dá permissão de execução ao script do Gradle (solução para o erro comum)
+# 2. Navega para a pasta do backend e executa o comando de build
+cmds = ["chmod +x backend-kotlin/gradlew", "cd backend-kotlin && ./gradlew build"]
 
 # Fase de start: como iniciar a aplicação depois de construída
 [start]
