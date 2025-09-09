@@ -1,10 +1,17 @@
+# Fase de build: como construir a aplicação
 [phases.build]
-# Comandos para dar permissão ao script gradlew e construir a aplicação
+# Comandos a serem executados:
+# 1. Instalar o Gradle se não estiver presente (não será necessário se já estiver no ambiente Nixpacks)
+# 2. Navegar para o diretório do projeto e rodar o comando de build do Gradle
 cmds = [
-  "chmod +x backend-kotlin/gradlew",   # Dá permissão ao script gradlew
-  "cd backend-kotlin && ./gradlew build"  # Navega até o diretório backend-kotlin e executa o build
+  "wget https://services.gradle.org/distributions/gradle-8.0-bin.zip -O gradle.zip",
+  "unzip gradle.zip -d /opt",
+  "ln -s /opt/gradle-8.0/bin/gradle /usr/bin/gradle", # Linka o Gradle globalmente
+  "gradle build"  # Roda o comando de build do Gradle
 ]
 
+# Fase de start: como iniciar a aplicação depois de construída
 [start]
-# Comando para iniciar a aplicação a partir do binário gerado pelo Gradle
-cmd = "./backend-kotlin/build/install/backend-kotlin/bin/backend-kotlin"
+# Comando para iniciar a aplicação Ktor
+cmd = "java -jar build/libs/backend-kotlin-0.0.1.jar"
+
