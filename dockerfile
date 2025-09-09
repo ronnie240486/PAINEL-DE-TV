@@ -1,11 +1,11 @@
 # Usar uma imagem base com OpenJDK (para rodar seu aplicativo Kotlin/Java)
 FROM openjdk:17-slim
 
-# Instalar Gradle no contêiner
-RUN apt-get update && apt-get install -y wget \
-    && wget https://services.gradle.org/distributions/gradle-8.0-bin.zip \
-    && unzip gradle-8.0-bin.zip -d /opt \
-    && rm gradle-8.0-bin.zip \
+# Instalar wget e unzip para baixar e extrair o Gradle
+RUN apt-get update && apt-get install -y wget unzip \
+    && wget https://services.gradle.org/distributions/gradle-8.0-bin.zip -O gradle.zip \
+    && unzip gradle.zip -d /opt \
+    && rm gradle.zip \
     && ln -s /opt/gradle-8.0/bin/gradle /usr/bin/gradle
 
 # Defina o diretório de trabalho dentro do contêiner
@@ -22,3 +22,4 @@ EXPOSE 8080
 
 # Comando para rodar a aplicação Ktor (ajustado para a saída do Gradle)
 CMD ["java", "-jar", "build/libs/backend-kotlin-0.0.1.jar"]
+
