@@ -1,0 +1,5 @@
+[build]
+# Define o comando para construir o projeto. Para um projeto Gradle, é "gradle build".
+build_command = "gradle build"
+# Especifica que o projeto a ser construído está dentro da pasta "backend-kotlin".
+root_directory = "backend-kotlin"
