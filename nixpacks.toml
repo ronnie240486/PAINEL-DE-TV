@@ -1,5 +1,12 @@
-[build]
-# Define o comando para construir o projeto. Para um projeto Gradle, é "gradle build".
-build_command = "gradle build"
-# Especifica que o projeto a ser construído está dentro da pasta "backend-kotlin".
-root_directory = "backend-kotlin"
+# Fase de build: como construir a aplicação
+[phases.build]
+# 1. Navega para a pasta do backend
+# 2. Executa o comando de build do Gradle
+cmds = ["cd backend-kotlin && ./gradlew build"]
+
+# Fase de start: como iniciar a aplicação depois de construída
+[start]
+# Comando para executar a aplicação a partir da raiz do repositório
+cmd = "./backend-kotlin/build/install/backend-kotlin/bin/backend-kotlin"
+
+
