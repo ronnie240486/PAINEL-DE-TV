@@ -1,16 +1,14 @@
 # Fase de build: como construir a aplicação
 [phases.build]
-# Comandos a serem executados para garantir que o Gradle esteja instalado
+# Comandos a serem executados:
 cmds = [
-  "apt-get update -y && apt-get install -y wget unzip",  # Instala wget e unzip
-  "wget https://services.gradle.org/distributions/gradle-8.0-bin.zip -O gradle.zip",  # Baixa o Gradle
-  "unzip gradle.zip -d /opt",  # Descompacta o Gradle
-  "rm gradle.zip",  # Remove o arquivo zip
-  "ln -s /opt/gradle-8.0/bin/gradle /usr/bin/gradle",  # Cria um link simbólico
-  "gradle build"  # Executa o build do Gradle
+  "apt-get update -y && apt-get install -y openjdk-17-jdk",  # Instalar Java 17
+  "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",  # Configurar JAVA_HOME
+  "export PATH=$JAVA_HOME/bin:$PATH",  # Garantir que o Java esteja no PATH
+  "gradle build"  # Executar o comando de build
 ]
 
 # Fase de start: como iniciar a aplicação depois de construída
 [start]
-# Comando para executar a aplicação Ktor
+# Comando para rodar a aplicação
 cmd = "java -jar build/libs/backend-kotlin-0.0.1.jar"
