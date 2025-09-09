@@ -2,13 +2,10 @@
 [phases.build]
 # Comandos a serem executados:
 cmds = [
-  "apt-get update -y && apt-get install -y openjdk-17-jdk",  # Instalar Java 17
-  "export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64",  # Configurar JAVA_HOME
-  "export PATH=$JAVA_HOME/bin:$PATH",  # Garantir que o Java esteja no PATH
-  "gradle build"  # Executar o comando de build
+  "gradle build"  # Executa o comando gradle para construir a aplicação
 ]
 
 # Fase de start: como iniciar a aplicação depois de construída
 [start]
-# Comando para rodar a aplicação
+# Comando para rodar a aplicação Ktor
 cmd = "java -jar build/libs/backend-kotlin-0.0.1.jar"
