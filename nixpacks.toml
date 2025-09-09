@@ -1,0 +1,12 @@
+# Fase de build: como construir a aplicação
+[phases.build]
+# Comandos a serem executados:
+# 1. Dá permissão de execução ao script do Gradle Wrapper
+# 2. Navega para a pasta do backend e executa o build usando o Wrapper
+cmds = ["chmod +x backend-kotlin/gradlew", "cd backend-kotlin && ./gradlew build"]
+
+# Fase de start: como iniciar a aplicação depois de construída
+[start]
+# Comando para executar a aplicação, usando o nome definido em settings.gradle.kts
+cmd = "./backend-kotlin/build/install/gerencia-app-backend/bin/gerencia-app-backend"
+
