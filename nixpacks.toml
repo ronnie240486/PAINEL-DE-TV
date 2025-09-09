@@ -1,13 +1,16 @@
 # Fase de build: como construir a aplicação
 [phases.build]
-# Comandos a serem executados para construir a aplicação
+# Comandos a serem executados para garantir que o Gradle esteja instalado
 cmds = [
-  "gradle build"  # Usa o Gradle instalado globalmente para construir o projeto
+  "apt-get update -y && apt-get install -y wget unzip",  # Instala wget e unzip
+  "wget https://services.gradle.org/distributions/gradle-8.0-bin.zip -O gradle.zip",  # Baixa o Gradle
+  "unzip gradle.zip -d /opt",  # Descompacta o Gradle
+  "rm gradle.zip",  # Remove o arquivo zip
+  "ln -s /opt/gradle-8.0/bin/gradle /usr/bin/gradle",  # Cria um link simbólico
+  "gradle build"  # Executa o build do Gradle
 ]
 
 # Fase de start: como iniciar a aplicação depois de construída
 [start]
-# Comando para executar a aplicação após a construção
+# Comando para executar a aplicação Ktor
 cmd = "java -jar build/libs/backend-kotlin-0.0.1.jar"
-
-
