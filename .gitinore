@@ -1,0 +1,4 @@
+Ficheiros de dependências (são instalados automaticamente)
+​node_modules
+​Ficheiro com as variáveis de ambiente (contém segredos)
+​.env
