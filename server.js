@@ -66,26 +66,33 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Backend do Gerencia App a funcionar!' });
 });
 
+// ROTA TEMPORÁRIA PARA CRIAR O PRIMEIRO ADMIN - APAGAR DEPOIS DE USAR!
+app.get('/api/setup/create-admin', async (req, res) => {
+    try {
+        const adminExists = await User.findOne({ username: 'admin' });
+        if (adminExists) {
+            return res.status(400).send('O admin já existe.');
+        }
+        const hashedPassword = await bcrypt.hash('admin123', 10); // Senha temporária
+        const admin = new User({ username: 'admin', password: hashedPassword, role: 'admin', credits: 99999 });
+        await admin.save();
+        res.status(201).send('Admin criado com sucesso! Use o utilizador "admin" e a senha "admin123" para entrar. Apague esta rota agora!');
+    } catch (error) {
+        res.status(500).send('Erro ao criar admin.');
+    }
+});
+
 
 // ==================================================================
 // == (NOVO!) CAMADA DE COMPATIBILIDADE PARA A APLICAÇÃO ANTIGA ==
 // ==================================================================
 const apiCompatibilityRouter = express.Router();
 
-// Simula o endpoint /api/guim.php
-// Esta rota irá agora responder quando a sua app tentar aceder a este endereço.
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    console.log("Corpo do pedido:", req.body); // Para ver o que a app está a enviar
-
-    // LÓGICA DE EXEMPLO:
-    // Aqui, você precisaria de adicionar a lógica que o seu guim.php antigo fazia.
-    // Por exemplo, verificar um utilizador e senha que a app envia.
-    // Como demonstração, vamos apenas devolver a lista de clientes internos.
+    console.log("Corpo do pedido:", req.body); 
     try {
         const clients = await Client.find({ type: 'Usuario' });
-        // As apps antigas podem esperar um formato de resposta específico.
-        // Isto é apenas um exemplo.
         res.json({
             status: "success",
             message: "Dados obtidos com sucesso",
@@ -96,13 +103,9 @@ apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     }
 });
 
-// Qualquer outro pedido para /api/ que não seja /api/guim.php
 apiCompatibilityRouter.use((req, res) => {
     res.status(404).json({ status: "error", message: `Endpoint de compatibilidade não encontrado: ${req.originalUrl}` });
 });
-
-// Liga o nosso router de compatibilidade ao endereço /api
-app.use('/api', apiCompatibilityRouter);
 
 
 // ==================================================================
@@ -111,14 +114,26 @@ app.use('/api', apiCompatibilityRouter);
 const modernApiRouter = express.Router();
 
 // --- ROTAS DE AUTENTICAÇÃO E UTILIZADORES ---
-modernApiRouter.post('/users/register', authMiddleware, async (req, res) => {
-     if (req.user.role !== 'admin') {
-        return res.status(403).json({ message: "Acesso negado." });
-    }
-    // ... restante da lógica ...
-});
 modernApiRouter.post('/auth/login', async (req, res) => {
-    // ... restante da lógica ...
+    try {
+        const { username, password } = req.body;
+        const user = await User.findOne({ username: username.toLowerCase() });
+        if (!user) {
+            return res.status(404).json({ message: "Utilizador não encontrado" });
+        }
+        const isMatch = await bcrypt.compare(password, user.password);
+        if (!isMatch) {
+            return res.status(400).json({ message: "Palavra-passe incorreta" });
+        }
+        const token = jwt.sign(
+            { id: user._id, username: user.username, role: user.role },
+            process.env.JWT_SECRET || 'seu_segredo_super_secreto',
+            { expiresIn: '8h' }
+        );
+        res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
+    } catch (error) {
+        res.status(500).json({ message: "Erro no servidor", error: error.message });
+    }
 });
 
 // --- ROTAS DE CLIENTES ---
@@ -158,9 +173,11 @@ modernApiRouter.delete('/clients/:id', authMiddleware, async (req, res) => {
         res.status(500).json({ message: err.message });
     }
 });
-// Liga o nosso router moderno ao endereço /api/v2 (para não haver conflitos)
-// ATENÇÃO: Terá de atualizar a URL no seu painel HTML para /api/v2
-app.use('/api/v2', modernApiRouter);
+
+
+// (CORREÇÃO!) Ligar os routers na ordem correta: do mais específico para o mais geral.
+app.use('/api/v2', modernApiRouter); // A nova API para o painel é verificada primeiro.
+app.use('/api', apiCompatibilityRouter); // A API de compatibilidade é verificada depois.
 
 
 // Iniciar o Servidor
