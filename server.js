@@ -1,93 +1,74 @@
-// Importação das ferramentas necessárias
+// 1. Importar as ferramentas necessárias
 const express = require('express');
-const cors = require('cors');
 const mongoose = require('mongoose');
+const cors = require('cors');
 require('dotenv').config(); // Carrega as variáveis do ficheiro .env
 
-// Inicializa a aplicação Express
+// 2. Inicializar a aplicação Express
 const app = express();
-
-// Middleware (funções que correm em todos os pedidos)
 app.use(cors()); // Permite que o seu painel HTML comunique com este servidor
-app.use(express.json()); // Permite ao servidor entender o formato JSON
+app.use(express.json()); // Permite ao servidor entender JSON
 
-// --- LIGAÇÃO À BASE DE DADOS MONGODB ATLAS ---
-mongoose.connect(process.env.MONGO_URI)
+// 3. Ligar à Base de Dados MongoDB Atlas
+const mongoUri = process.env.MONGO_URI;
+
+mongoose.connect(mongoUri)
   .then(() => console.log("Ligação ao MongoDB Atlas bem-sucedida!"))
   .catch(err => console.error("Erro ao ligar ao MongoDB:", err));
 
-// --- DEFINIÇÃO DO MODELO DE DADOS (A "FORMA" DE UM CLIENTE) ---
+// 4. (NOVO) ROTA DE SAÚDE - Para responder ao Railway
+app.get('/', (req, res) => {
+    res.status(200).json({ status: 'ok', message: 'Backend do Gerencia App a funcionar!' });
+});
+
+// 5. Definir a estrutura (Schema) para os Clientes
 const clientSchema = new mongoose.Schema({
-    login: { type: String, required: false }, // Para clientes externos
-    password: { type: String, required: false }, // Para clientes externos
-    mac: { type: String, required: false }, // Para clientes internos
-    serverName: { type: String, required: true },
+    serverName: String,
+    mac: { type: String, unique: true, sparse: true }, // MAC é único, mas pode não existir (sparse)
+    login: { type: String, unique: true, sparse: true },// Login é único, mas pode não existir
+    password: { type: String },
     phone: String,
     m3u8_list: String,
     epg_url: String,
     price: String,
-    status: { type: String, default: 'Liberado' },
-    type: { type: String, required: true }, // 'Usuario' ou 'Externo'
+    status: String,
+    type: String, // 'internal' ou 'external'
     creationDate: { type: Date, default: Date.now },
     expirationDate: Date,
 });
 
 const Client = mongoose.model('Client', clientSchema);
 
-// --- ROTAS DA API ---
+// 6. Criar os Endpoints da API
 
-// Rota de boas-vindas
-app.get('/api', (req, res) => {
-  res.send('Bem-vindo ao Backend do Gerencia App (Node.js)!');
-});
-
-// GET /api/clients/:type - Obter todos os clientes (internos ou externos)
+// Obter todos os clientes (internos ou externos)
 app.get('/api/clients/:type', async (req, res) => {
-  try {
-    const clientType = req.params.type === 'internal' ? 'Usuario' : 'Externo';
-    const clients = await Client.find({ type: clientType });
-    res.json(clients);
-  } catch (error) {
-    res.status(500).json({ message: 'Erro ao buscar clientes', error });
-  }
+    try {
+        const clientType = req.params.type === 'external' ? 'Externo' : 'Usuario';
+        const clients = await Client.find({ type: clientType });
+        res.json(clients);
+    } catch (err) {
+        res.status(500).json({ message: err.message });
+    }
 });
 
-// POST /api/clients - Adicionar um novo cliente
+// Adicionar um novo cliente
 app.post('/api/clients', async (req, res) => {
-  try {
-    const newClient = new Client(req.body);
-    await newClient.save();
-    res.status(201).json({ status: 'Cliente adicionado com sucesso', client: newClient });
-  } catch (error) {
-    res.status(400).json({ message: 'Erro ao adicionar cliente', error });
-  }
-});
-
-// PUT /api/clients/:id - Atualizar um cliente
-app.put('/api/clients/:id', async (req, res) => {
+    const client = new Client(req.body);
     try {
-        const updatedClient = await Client.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        res.json({ status: 'Cliente atualizado com sucesso', client: updatedClient });
-    } catch (error) {
-        res.status(400).json({ message: 'Erro ao atualizar cliente', error });
+        const newClient = await client.save();
+        res.status(201).json(newClient);
+    } catch (err) {
+        res.status(400).json({ message: err.message });
     }
 });
 
-// DELETE /api/clients/:id - Apagar um cliente
-app.delete('/api/clients/:id', async (req, res) => {
-    try {
-        await Client.findByIdAndDelete(req.params.id);
-        res.json({ status: 'Cliente apagado com sucesso' });
-    } catch (error) {
-        res.status(500).json({ message: 'Erro ao apagar cliente', error });
-    }
-});
+// ... (futuramente, adicionar aqui as rotas para editar, apagar, etc.)
 
-
-// Iniciar o servidor
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Servidor a correr na porta ${PORT}`);
+// 7. Iniciar o Servidor
+const port = process.env.PORT || 3000;
+app.listen(port, () => {
+    console.log(`Servidor a correr na porta ${port}`);
 });
 
 
