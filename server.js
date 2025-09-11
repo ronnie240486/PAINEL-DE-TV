@@ -66,6 +66,14 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Backend do Gerencia App a funcionar!' });
 });
 
+// (NOVO!) Rota para receber POSTs da Smart TV
+app.post('/', (req, res) => {
+    console.log('Recebido POST da Smart TV na raiz do servidor. Corpo do pedido:', req.body);
+    // Apenas confirma o recebimento. A lógica de processamento pode ser adicionada aqui.
+    res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
+});
+
+
 // ROTA TEMPORÁRIA PARA CRIAR O PRIMEIRO ADMIN - APAGAR DEPOIS DE USAR!
 app.get('/api/setup/create-admin', async (req, res) => {
     try {
@@ -223,4 +231,5 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
+
 
