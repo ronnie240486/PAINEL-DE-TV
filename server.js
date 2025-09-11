@@ -74,7 +74,7 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA COM CORREÇÃO DE BASE64 ---
+// --- (NOVA FUNÇÃO!) FUNÇÃO ULTRA ROBUSTA COM CORREÇÃO DE BASE64 E CARACTERES BINÁRIOS ---
 function decodeRequestBody(body) {
   let rawString;
 
@@ -101,6 +101,9 @@ function decodeRequestBody(body) {
       rawString = JSON.stringify(body);
     }
 
+    // Remove caracteres de controle binários que podem quebrar JSON
+    rawString = rawString.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
+
     // Extrai o primeiro objeto JSON válido da string
     const jsonMatch = rawString.match(/\{.*\}/s);
     if (!jsonMatch) {
@@ -114,7 +117,7 @@ function decodeRequestBody(body) {
       console.log('Dados decodificados com sucesso:', parsed);
       return parsed;
     } catch (parseErr) {
-      console.warn('Erro ao fazer JSON.parse:', parseErr.message);
+      console.warn('Erro ao fazer JSON.parse mesmo após limpeza:', parseErr.message);
       return null;
     }
   } catch (err) {
