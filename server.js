@@ -80,13 +80,15 @@ app.post('/', (req, res) => {
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            // CORREÇÃO DEFINITIVA: Extrai e limpa profundamente o JSON
             const firstBracket = decodedString.indexOf('{');
             const lastBracket = decodedString.lastIndexOf('}');
 
             if (firstBracket !== -1 && lastBracket > firstBracket) {
                 const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const decodedData = JSON.parse(potentialJson);
+                // Remove todos os caracteres de controlo e outros caracteres não-visíveis
+                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                const decodedData = JSON.parse(cleanJson);
                 console.log('Dados descodificados da Smart TV:', decodedData);
             } else {
                  console.warn('Não foi encontrado um objeto JSON válido nos dados da Smart TV.');
@@ -142,13 +144,15 @@ apiCompatibilityRouter.post('/guim.php', async (req, res) => {
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            // CORREÇÃO DEFINITIVA: Extrai e limpa profundamente o JSON
             const firstBracket = decodedString.indexOf('{');
             const lastBracket = decodedString.lastIndexOf('}');
 
             if (firstBracket !== -1 && lastBracket > firstBracket) {
                 const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const decodedData = JSON.parse(potentialJson);
+                 // Remove todos os caracteres de controlo e outros caracteres não-visíveis
+                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                const decodedData = JSON.parse(cleanJson);
                 console.log('Dados descodificados da App (guim.php):', decodedData);
             } else {
                 console.warn('Não foi encontrado um objeto JSON válido nos dados (guim.php).');
@@ -187,13 +191,15 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            // CORREÇÃO DEFINITIVA: Extrai e limpa profundamente o JSON
             const firstBracket = decodedString.indexOf('{');
             const lastBracket = decodedString.lastIndexOf('}');
 
             if (firstBracket !== -1 && lastBracket > firstBracket) {
                 const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const decodedData = JSON.parse(potentialJson);
+                 // Remove todos os caracteres de controlo e outros caracteres não-visíveis
+                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                const decodedData = JSON.parse(cleanJson);
                 console.log('Dados descodificados da App (v4/guim.php):', decodedData);
             } else {
                 console.warn('Não foi encontrado um objeto JSON válido nos dados (v4/guim.php).');
