@@ -74,11 +74,12 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO QUE LIDA COM MÚLTIPLOS JSONS ---
+// --- (NOVA FUNÇÃO!) FUNÇÃO ULTRA-RESILIENTE PARA DECODIFICAR DADOS ---
 function decodeRequestBody(body) {
   let rawString;
 
   try {
+    // 1️⃣ Detecta V4 Base64
     if (body.data && typeof body.data === 'string') {
       // Remove caracteres inválidos do Base64
       let sanitized = body.data.replace(/[^A-Za-z0-9+/=]/g, '');
@@ -89,45 +90,56 @@ function decodeRequestBody(body) {
         sanitized += '='.repeat(paddingNeeded);
       }
 
+      // Tenta decodificar Base64 para UTF-8
       try {
         rawString = Buffer.from(sanitized, 'base64').toString('utf8');
       } catch {
-        rawString = body.data;
+        rawString = ''; // fallback para string vazia se decodificação falhar
       }
     } else {
+      // JSON puro
       rawString = JSON.stringify(body);
     }
 
-    // Remove caracteres de controle binários
+    // 2️⃣ Remove caracteres de controle binários que quebram o JSON
     rawString = rawString.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
 
-    // Regex para encontrar todos os objetos JSON na string (objetos simples)
-    const jsonMatches = rawString.match(/\{[^{}]*\}/g); 
-    if (!jsonMatches || jsonMatches.length === 0) {
-      console.warn('Nenhum objeto JSON válido encontrado.');
-      return [];
-    }
-
+    // 3️⃣ Regex para extrair todos os objetos JSON
+    const jsonMatches = rawString.match(/\{[^{}]*\}/g);
     const parsedObjects = [];
-    for (const match of jsonMatches) {
-      try {
-        parsedObjects.push(JSON.parse(match));
-      } catch {
-        // Ignora objetos inválidos que não puderam ser parseados
+
+    if (jsonMatches) {
+      for (const match of jsonMatches) {
+        try {
+          parsedObjects.push(JSON.parse(match));
+        } catch {
+          // Ignora blocos inválidos
+        }
       }
     }
 
+    // 4️⃣ Fallback extremo: nenhum JSON válido encontrado
     if (parsedObjects.length === 0) {
-      console.warn('Nenhum JSON pôde ser parseado mesmo após extração.');
-      return [];
+      console.warn('Nenhum JSON válido encontrado. Usando fallback extremo.');
+      parsedObjects.push({
+        app_device_id: '',
+        app_type: 'unknown',
+        version: 'unknown',
+        is_paid: false
+      });
     }
 
-    console.log('Dados decodificados com sucesso:', parsedObjects);
+    console.log('Dados decodificados (ultra-safe):', parsedObjects);
     return parsedObjects;
 
   } catch (err) {
-    console.error('Erro inesperado ao processar o corpo da requisição:', err.message);
-    return [];
+    console.error('Erro inesperado ao processar a requisição:', err.message);
+    return [{
+      app_device_id: '',
+      app_type: 'unknown',
+      version: 'unknown',
+      is_paid: false
+    }];
   }
 }
 
@@ -143,9 +155,7 @@ app.get('/', (req, res) => {
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
     const decodedArray = decodeRequestBody(req.body);
-    if (decodedArray.length === 0) {
-        return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
-    }
+    // A função agora sempre retorna um array, então não precisamos de um check de `null`
     res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.', received: decodedArray });
 });
 
@@ -190,9 +200,8 @@ apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
     const decodedArray = decodeRequestBody(req.body);
     
-    if (decodedArray.length === 0) {
-        console.warn("Decodificação falhou, respondendo com lista de clientes para compatibilidade.");
-    }
+    // A lógica continua, pois mesmo que a decodificação falhe, a função retorna um objeto padrão
+    // garantindo que a app antiga não quebre.
 
     try {
         const clients = await Client.find({ type: 'Usuario' });
@@ -221,21 +230,7 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
     
     const decodedArray = decodeRequestBody(req.body);
-    if (decodedArray.length === 0) {
-        // Fallback de compatibilidade: responde com sucesso e lista de clientes para não quebrar a app
-        console.warn("Decodificação falhou na V4, respondendo com lista de clientes para compatibilidade.");
-        try {
-            const clients = await Client.find({ type: 'Usuario' });
-            return res.json({
-                status: "success",
-                message: "Dados recebidos inválidos, retornando lista completa.",
-                data: clients
-            });
-        } catch (error) {
-            return res.status(500).json({ status: "error", message: "Erro no servidor (v4)" });
-        }
-    }
-
+    
     try {
         const clients = await Client.find({ type: 'Usuario' });
         res.json({
