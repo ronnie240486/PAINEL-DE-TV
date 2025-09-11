@@ -74,17 +74,16 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO ULTRA ROBUSTA COM CORREÇÃO DE BASE64 E CARACTERES BINÁRIOS ---
+// --- (NOVA FUNÇÃO!) FUNÇÃO QUE LIDA COM MÚLTIPLOS JSONS ---
 function decodeRequestBody(body) {
   let rawString;
 
   try {
-    // Detecta V4 Base64
-    if (body && body.data && typeof body.data === 'string') {
+    if (body.data && typeof body.data === 'string') {
       // Remove caracteres inválidos do Base64
       let sanitized = body.data.replace(/[^A-Za-z0-9+/=]/g, '');
 
-      // Corrige padding Base64 (múltiplos de 4)
+      // Corrige padding Base64
       const paddingNeeded = 4 - (sanitized.length % 4);
       if (paddingNeeded > 0 && paddingNeeded < 4) {
         sanitized += '='.repeat(paddingNeeded);
@@ -92,37 +91,43 @@ function decodeRequestBody(body) {
 
       try {
         rawString = Buffer.from(sanitized, 'base64').toString('utf8');
-      } catch (err) {
-        console.warn('Falha ao decodificar Base64, usando string bruta:', err.message);
+      } catch {
         rawString = body.data;
       }
     } else {
-      // JSON puro: converte para string para processar
       rawString = JSON.stringify(body);
     }
 
-    // Remove caracteres de controle binários que podem quebrar JSON
+    // Remove caracteres de controle binários
     rawString = rawString.replace(/[\x00-\x1F\x7F-\x9F]/g, '');
 
-    // Extrai o primeiro objeto JSON válido da string
-    const jsonMatch = rawString.match(/\{.*\}/s);
-    if (!jsonMatch) {
-      console.warn('Nenhum objeto JSON válido encontrado na string decodificada.');
-      return null;
+    // Regex para encontrar todos os objetos JSON na string (objetos simples)
+    const jsonMatches = rawString.match(/\{[^{}]*\}/g); 
+    if (!jsonMatches || jsonMatches.length === 0) {
+      console.warn('Nenhum objeto JSON válido encontrado.');
+      return [];
     }
 
-    // Parse seguro do JSON
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      console.log('Dados decodificados com sucesso:', parsed);
-      return parsed;
-    } catch (parseErr) {
-      console.warn('Erro ao fazer JSON.parse mesmo após limpeza:', parseErr.message);
-      return null;
+    const parsedObjects = [];
+    for (const match of jsonMatches) {
+      try {
+        parsedObjects.push(JSON.parse(match));
+      } catch {
+        // Ignora objetos inválidos que não puderam ser parseados
+      }
     }
+
+    if (parsedObjects.length === 0) {
+      console.warn('Nenhum JSON pôde ser parseado mesmo após extração.');
+      return [];
+    }
+
+    console.log('Dados decodificados com sucesso:', parsedObjects);
+    return parsedObjects;
+
   } catch (err) {
     console.error('Erro inesperado ao processar o corpo da requisição:', err.message);
-    return null;
+    return [];
   }
 }
 
@@ -137,11 +142,11 @@ app.get('/', (req, res) => {
 // Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
-    const decodedData = decodeRequestBody(req.body);
-    if (!decodedData) {
+    const decodedArray = decodeRequestBody(req.body);
+    if (decodedArray.length === 0) {
         return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
     }
-    res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.', received: decodedData });
+    res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.', received: decodedArray });
 });
 
 
@@ -183,9 +188,9 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    const decodedData = decodeRequestBody(req.body);
+    const decodedArray = decodeRequestBody(req.body);
     
-    if (!decodedData) {
+    if (decodedArray.length === 0) {
         console.warn("Decodificação falhou, respondendo com lista de clientes para compatibilidade.");
     }
 
@@ -215,8 +220,8 @@ const apiV4CompatibilityRouter = express.Router();
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
     
-    const decodedData = decodeRequestBody(req.body);
-    if (!decodedData) {
+    const decodedArray = decodeRequestBody(req.body);
+    if (decodedArray.length === 0) {
         // Fallback de compatibilidade: responde com sucesso e lista de clientes para não quebrar a app
         console.warn("Decodificação falhou na V4, respondendo com lista de clientes para compatibilidade.");
         try {
@@ -237,7 +242,7 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
             status: "success",
             message: "Dados obtidos com sucesso (v4)",
             data: clients,
-            received: decodedData // Opcional: devolver o que foi recebido para depuração
+            received: decodedArray // Opcional: devolver o que foi recebido para depuração
         });
     } catch (error) {
         res.status(500).json({ status: "error", message: "Erro no servidor (v4)" });
