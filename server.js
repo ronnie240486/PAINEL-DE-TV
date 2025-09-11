@@ -74,35 +74,45 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA PARA DECODIFICAR DADOS ---
+// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA MELHORADA PARA DECODIFICAR DADOS ---
 function decodeAndParseBody(rawBody) {
   try {
     let dataStr;
 
-    // Caso 1: Vem no formato { data: "..." }
     if (rawBody && rawBody.data) {
-      // Sanitiza Base64: remove caracteres inválidos
-      const sanitized = String(rawBody.data).replace(/[^A-Za-z0-9+/=]/g, '');
-      // Decodifica Base64 para UTF-8
-      dataStr = Buffer.from(sanitized, 'base64').toString('utf8');
+      // Limpa caracteres não-Base64
+      const sanitized = String(rawBody.data).replace(/[^A-Za-z0-9+/=]+/g, '');
+      
+      // Tenta decodificar Base64
+      try {
+        dataStr = Buffer.from(sanitized, 'base64').toString('utf8');
+      } catch (err) {
+        console.warn('Erro ao decodificar Base64, tentando string bruta...', err.message);
+        dataStr = rawBody.data; // Usa o dado bruto como fallback
+      }
     } else {
-      // Caso 2: Vem JSON puro (sem o wrapper "data")
+      // Se não houver campo 'data', trata o corpo todo como JSON
       dataStr = JSON.stringify(rawBody);
     }
 
-    // Tenta fazer parse JSON do conteúdo decodificado
+    // Extrai o primeiro objeto JSON válido da string (ignora lixo no início ou no final)
+    const firstJsonMatch = dataStr.match(/\{.*\}/s);
+    if (!firstJsonMatch) {
+      console.warn('Nenhum objeto JSON válido encontrado na string decodificada.');
+      return null;
+    }
+
+    // Parse seguro do JSON extraído
     try {
-      // Limpeza final de caracteres de controlo antes do parse
-      const cleanJson = dataStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-      const json = JSON.parse(cleanJson);
+      const json = JSON.parse(firstJsonMatch[0]);
       console.log('Dados decodificados com sucesso:', json);
       return json;
     } catch (parseErr) {
-      console.warn('JSON inválido após decodificação:', parseErr.message);
+      console.warn('JSON inválido após extração:', parseErr.message);
       return null;
     }
   } catch (err) {
-    console.error('Erro ao processar dados:', err.message);
+    console.error('Erro geral ao processar dados:', err.message);
     return null;
   }
 }
@@ -167,9 +177,7 @@ apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     const decodedData = decodeAndParseBody(req.body);
     
     if (!decodedData) {
-        // Mesmo que a decodificação falhe, a app antiga pode esperar uma lista de clientes vazia.
-        // Respondemos com sucesso mas com dados vazios para não quebrar a app.
-        console.warn("Decodificação falhou, respondendo com lista de clientes vazia para compatibilidade.");
+        console.warn("Decodificação falhou, respondendo com lista de clientes para compatibilidade.");
     }
 
     try {
@@ -200,7 +208,8 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     
     const decodedData = decodeAndParseBody(req.body);
     if (!decodedData) {
-        return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
+        // Fallback de compatibilidade: responde com sucesso e lista de clientes para não quebrar a app
+        console.warn("Decodificação falhou na V4, respondendo com lista de clientes para compatibilidade.");
     }
 
     try {
@@ -276,7 +285,7 @@ modernApiRouter.put('/clients/:id', authMiddleware, async (req, res) => {
 modernApiRouter.delete('/clients/:id', authMiddleware, async (req, res) => {
     try {
         const deletedClient = await Client.findByIdAndDelete(req.params.id);
-        if (!deletedClient) return res.status(404).json({ message: 'Cliente não encontrado' });
+        if (!deletedClient) return res.status(4e4).json({ message: 'Cliente não encontrado' });
         res.json({ message: 'Cliente apagado com sucesso' });
     } catch (err) {
         res.status(500).json({ message: err.message });
