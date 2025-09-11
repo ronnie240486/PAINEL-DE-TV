@@ -10,9 +10,8 @@ require('dotenv').config();
 const app = express();
 app.use(cors());
 app.use(express.json());
-// Permite que o servidor entenda dados de formulários (comuns em APIs antigas)
 app.use(express.urlencoded({ extended: true }));
-// (NOVO!) Força o parser para text/plain, para capturar body de dispositivos antigos
+// Mantendo o parser de texto, mas com lógica robusta para lidar com ele
 app.use(express.text({ type: '*/*' }));
 
 
@@ -68,6 +67,81 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
+// --- (NOVO!) FUNÇÃO CENTRALIZADA PARA DECODIFICAR PEDIDOS ---
+function decodeRequestBody(req) {
+    let base64Data = null;
+
+    // Logs de depuração para entender o que está a ser recebido
+    console.log("--- Iniciando decodificação ---");
+    console.log("Content-Type:", req.headers['content-type']);
+    console.log("Corpo do pedido (tipo):", typeof req.body);
+    // console.log("Corpo do pedido (conteúdo):", req.body); // Descomente para ver o conteúdo completo
+
+    if (typeof req.body === 'object' && req.body !== null && req.body.data) {
+        // Caso 1: Corpo JSON ou urlencoded como { data: "..." }
+        base64Data = req.body.data;
+    } else if (typeof req.body === 'string') {
+        // Caso 2: Corpo como texto simples
+        if (req.body.startsWith('data=')) {
+            base64Data = req.body.substring(5); // Remove "data="
+        } else {
+             // Tenta analisar a string como JSON para o caso de ter sido mal interpretada como texto
+            try {
+                const parsedBody = JSON.parse(req.body);
+                if (parsedBody && parsedBody.data) {
+                    base64Data = parsedBody.data;
+                } else {
+                     base64Data = req.body;
+                }
+            } catch (e) {
+                // Não é um JSON, assume que a string inteira é o dado
+                base64Data = req.body;
+            }
+        }
+    }
+
+    if (!base64Data || typeof base64Data !== 'string') {
+        console.warn("⚠️ Não foi possível extrair a string Base64 do corpo do pedido.");
+        console.log("--- Fim da decodificação ---");
+        return null;
+    }
+
+    try {
+        const sanitizedBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
+        if (sanitizedBase64.length === 0) {
+            console.warn("⚠️ Dados Base64 estavam vazios após a limpeza.");
+            console.log("--- Fim da decodificação ---");
+            return null;
+        }
+
+        const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+        console.log("String decodificada (bruta):", decodedString);
+
+        // Limpeza agressiva final: remove todos os caracteres não imprimíveis
+        const cleanString = decodedString.replace(/[^\x20-\x7E]/g, '');
+        
+        const firstBracket = cleanString.indexOf('{');
+        const lastBracket = cleanString.lastIndexOf('}');
+
+        if (firstBracket !== -1 && lastBracket > firstBracket) {
+            const potentialJson = cleanString.substring(firstBracket, lastBracket + 1);
+            const jsonData = JSON.parse(potentialJson);
+            console.log("Dados decodificados com sucesso:", jsonData);
+            console.log("--- Fim da decodificação ---");
+            return jsonData;
+        } else {
+            console.warn("Nenhum objeto JSON válido encontrado na string decodificada e limpa.");
+            console.log("--- Fim da decodificação ---");
+            return null;
+        }
+    } catch (err) {
+        console.error("Erro final ao processar dados:", err.message);
+        console.log("--- Fim da decodificação ---");
+        return null;
+    }
+}
+
+
 // --- ROTAS DA API ---
 
 // Rota de Saúde
@@ -78,32 +152,8 @@ app.get('/', (req, res) => {
 // Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
-    
-    // (CORRIGIDO!) Lógica de decode mais segura
-    let decodedData = null;
-    if (req.body && req.body.data) {
-        try {
-            const sanitizedBase64 = String(req.body.data).replace(/[^A-Za-z0-9+/=]/g, '');
-            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-
-            const firstBracket = decodedString.indexOf('{');
-            const lastBracket = decodedString.lastIndexOf('}');
-
-            if (firstBracket !== -1 && lastBracket > firstBracket) {
-                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-                decodedData = JSON.parse(cleanJson);
-                console.log("Dados decodificados:", decodedData);
-            } else {
-                console.warn("Nenhum JSON válido encontrado no data.");
-            }
-        } catch (err) {
-            console.error("Erro ao decodificar data:", err.message);
-        }
-    } else {
-        console.warn("⚠️ Nenhum campo 'data' recebido no POST.");
-    }
-
+    const decodedData = decodeRequestBody(req);
+    // Responde sempre com sucesso para a app não dar erro de rede, mesmo que a decodificação falhe.
     res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
 });
 
@@ -146,31 +196,7 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    
-    // (CORRIGIDO!) Lógica de decode mais segura
-    let decodedData = null;
-    if (req.body && req.body.data) {
-        try {
-            const sanitizedBase64 = String(req.body.data).replace(/[^A-Za-z0-9+/=]/g, '');
-            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-
-            const firstBracket = decodedString.indexOf('{');
-            const lastBracket = decodedString.lastIndexOf('}');
-
-            if (firstBracket !== -1 && lastBracket > firstBracket) {
-                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-                decodedData = JSON.parse(cleanJson);
-                console.log("Dados decodificados (guim.php):", decodedData);
-            } else {
-                console.warn("Nenhum JSON válido encontrado no data (guim.php).");
-            }
-        } catch (err) {
-            console.error("Erro ao decodificar data (guim.php):", err.message);
-        }
-    } else {
-        console.warn("⚠️ Nenhum campo 'data' recebido no POST (guim.php).");
-    }
+    const decodedData = decodeRequestBody(req);
 
     try {
         const clients = await Client.find({ type: 'Usuario' });
@@ -197,31 +223,7 @@ const apiV4CompatibilityRouter = express.Router();
 // Rota para a nova versão da app Android
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
-    
-    // (CORRIGIDO!) Lógica de decode mais segura
-    let decodedData = null;
-    if (req.body && req.body.data) {
-        try {
-            const sanitizedBase64 = String(req.body.data).replace(/[^A-Za-z0-9+/=]/g, '');
-            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-
-            const firstBracket = decodedString.indexOf('{');
-            const lastBracket = decodedString.lastIndexOf('}');
-
-            if (firstBracket !== -1 && lastBracket > firstBracket) {
-                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-                decodedData = JSON.parse(cleanJson);
-                console.log("Dados decodificados (v4/guim.php):", decodedData);
-            } else {
-                console.warn("Nenhum JSON válido encontrado no data (v4/guim.php).");
-            }
-        } catch (err) {
-            console.error("Erro ao decodificar data (v4/guim.php):", err.message);
-        }
-    } else {
-        console.warn("⚠️ Nenhum campo 'data' recebido no POST (v4/guim.php).");
-    }
+    const decodedData = decodeRequestBody(req);
 
     try {
         // A lógica é a mesma da API de compatibilidade anterior
