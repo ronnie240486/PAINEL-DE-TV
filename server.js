@@ -88,6 +88,20 @@ app.get('/api/setup/create-admin', async (req, res) => {
 // ==================================================================
 const apiCompatibilityRouter = express.Router();
 
+// NOVO: Adicionada a rota para a app Android
+apiCompatibilityRouter.get('/setting.php', (req, res) => {
+    console.log("Recebido pedido na rota de compatibilidade /api/setting.php");
+    const settings = {
+        "appName": "Gerencia App",
+        "version": "1.2.5",
+        "maintenanceMode": false,
+        "welcomeMessage": "Bem-vindo à nossa aplicação!",
+        "apiUrl": "https://backend-kotlin-production.up.railway.app/api" // Manter /api para a app antiga
+    };
+    res.json(settings);
+});
+
+
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
     console.log("Corpo do pedido:", req.body); 
@@ -137,10 +151,10 @@ modernApiRouter.post('/auth/login', async (req, res) => {
 });
 
 // --- ROTAS DE CLIENTES ---
-modernApiRouter.get('/clients/:type', authMiddleware, async (req, res) => {
+// Rota GET para todos os clientes, para simplificar o frontend.
+modernApiRouter.get('/clients', authMiddleware, async (req, res) => {
     try {
-        const clientType = req.params.type === 'external' ? 'Externo' : 'Usuario';
-        const clients = await Client.find({ type: clientType });
+        const clients = await Client.find({}); // Busca todos os clientes
         res.json(clients);
     } catch (err) {
         res.status(500).json({ message: err.message });
@@ -185,4 +199,3 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
-
