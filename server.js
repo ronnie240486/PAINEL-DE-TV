@@ -121,22 +121,22 @@ function decodeRequestBody(req) {
         const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
         console.log("String decodificada (bruta):", decodedString);
 
-        // Etapa 4: Extrair a porção que se parece com JSON.
-        const firstBracket = decodedString.indexOf('{');
-        const lastBracket = decodedString.lastIndexOf('}');
+        // Etapa 4 (NOVA LÓGICA): Limpeza agressiva e extração de JSON
+        // Remove todos os caracteres que não são ASCII imprimíveis (mantém o básico para JSON)
+        const cleanString = decodedString.replace(/[^\x20-\x7E]/g, '');
+
+        const firstBracket = cleanString.indexOf('{');
+        const lastBracket = cleanString.lastIndexOf('}');
 
         if (firstBracket !== -1 && lastBracket > firstBracket) {
-            const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+            const potentialJson = cleanString.substring(firstBracket, lastBracket + 1);
             
-            // Etapa 5: Limpeza "cirúrgica" final, removendo caracteres de controlo inválidos.
-            const cleanJson = potentialJson.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFD]/g, '');
-            
-            const jsonData = JSON.parse(cleanJson);
+            const jsonData = JSON.parse(potentialJson);
             console.log("Dados decodificados com sucesso:", jsonData);
             console.log("--- Fim da decodificação ---");
             return jsonData;
         } else {
-            console.warn("Nenhum objeto JSON válido encontrado na string decodificada.");
+            console.warn("Nenhum objeto JSON válido encontrado na string decodificada e limpa.");
             console.log("--- Fim da decodificação ---");
             return null;
         }
@@ -333,6 +333,7 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
+
 
 
 
