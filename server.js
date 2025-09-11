@@ -1,201 +1,147 @@
 // 1. Importar as ferramentas necessárias
 const express = require('express');
-const mongoose = require('mongoose');
 const cors = require('cors');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-require('dotenv').config();
+const crypto = require('crypto'); // Para gerar IDs únicos para novos clientes
 
 // 2. Inicializar a aplicação Express
 const app = express();
+const PORT = process.env.PORT || 8080; // Usar a porta do ambiente ou 8080
+
+// Habilita o CORS para permitir pedidos do painel e outras apps.
 app.use(cors());
+// Permite que o servidor entenda o corpo de pedidos em formato JSON.
 app.use(express.json());
-// Permite que o servidor entenda dados de formulários (comuns em APIs antigas)
-app.use(express.urlencoded({ extended: true }));
 
+// --- BASE DE DADOS SIMULADA (MOCK) ---
+// Para demonstração, guardamos os dados em memória.
+// Numa aplicação real, isto viria de uma base de dados como MongoDB.
 
-// 3. Ligar à Base de Dados MongoDB Atlas
-const mongoUri = process.env.MONGO_URI;
-mongoose.connect(mongoUri)
-  .then(() => console.log("Ligação ao MongoDB Atlas bem-sucedida!"))
-  .catch(err => console.error("Erro ao ligar ao MongoDB:", err));
+const MOCK_USERS = [
+    { _id: 'admin01', username: 'admin', password: 'admin123', role: 'admin' }
+];
 
-// --- MODELOS DA BASE DE DADOS (sem alterações) ---
-const userSchema = new mongoose.Schema({
-    username: { type: String, required: true, unique: true, lowercase: true },
-    password: { type: String, required: true },
-    role: { type: String, enum: ['admin', 'reseller'], default: 'reseller' },
-    credits: { type: Number, default: 0 }
-});
-const User = mongoose.model('User', userSchema);
+let MOCK_CLIENTS = [
+    { _id: 'client01', serverName: 'Sala TV (Exemplo)', mac: '00:1A:2B:3C:4D:5E', type: 'Usuario', status: 'Liberado', phone: '(11) 98765-4321', price: '25.00', creationDate: new Date('2025-08-01T10:00:00Z'), expirationDate: new Date('2026-08-01T10:00:00Z') },
+    { _id: 'client02', serverName: 'Quarto Principal (Exemplo)', mac: 'AA:BB:CC:DD:EE:FF', type: 'Usuario', status: 'Bloqueado', phone: '(21) 91234-5678', price: '30.00', creationDate: new Date('2025-07-15T14:30:00Z'), expirationDate: new Date('2025-09-15T14:30:00Z') },
+    { _id: 'client03', serverName: 'Cliente Externo (Exemplo)', login: 'user_externo', type: 'Externo', status: 'Liberado', phone: '(31) 95555-1234', price: '40.00', creationDate: new Date('2025-09-01T11:00:00Z'), expirationDate: new Date('2026-09-01T11:00:00Z') }
+];
 
-const clientSchema = new mongoose.Schema({
-    serverName: String,
-    mac: { type: String, unique: true, sparse: true },
-    login: { type: String, unique: true, sparse: true },
-    password: { type: String },
-    phone: String,
-    m3u8_list: String,
-    epg_url: String,
-    price: String,
-    status: String,
-    type: String,
-    creationDate: { type: Date, default: Date.now },
-    expirationDate: Date,
-    resellerId: { type: mongoose.Schema.Types.ObjectId, ref: 'User' }
-});
-const Client = mongoose.model('Client', clientSchema);
-
-
-// --- MIDDLEWARE DE AUTENTICAÇÃO (sem alterações) ---
+// --- MIDDLEWARE DE AUTENTICAÇÃO SIMULADO ---
+// Verifica se um "token" de autenticação foi enviado no pedido.
+// Numa app real, isto usaria JWT para validar o token.
 const authMiddleware = (req, res, next) => {
     const authHeader = req.headers['authorization'];
     const token = authHeader && authHeader.split(' ')[1];
-    if (token == null) return res.sendStatus(401);
-    jwt.verify(token, process.env.JWT_SECRET || 'seu_segredo_super_secreto', (err, user) => {
-        if (err) return res.sendStatus(403);
-        req.user = user;
-        next();
-    });
+    
+    // Para esta simulação, aceitamos um token fixo.
+    if (token === 'dummy-auth-token-12345') {
+        next(); // Token válido, pode prosseguir.
+    } else {
+        res.status(401).json({ message: 'Acesso não autorizado. Token inválido ou ausente.' });
+    }
 };
 
-// --- ROTAS DA API ---
 
-// Rota de Saúde
-app.get('/', (req, res) => {
-    res.status(200).json({ status: 'ok', message: 'Backend do Gerencia App a funcionar!' });
-});
+// ==================================================================
+// == ROTAS MODERNAS PARA O PAINEL HTML (API v2) ==
+// ==================================================================
+const apiV2Router = express.Router();
 
-// ROTA TEMPORÁRIA PARA CRIAR O PRIMEIRO ADMIN - APAGAR DEPOIS DE USAR!
-app.get('/api/setup/create-admin', async (req, res) => {
-    try {
-        const adminExists = await User.findOne({ username: 'admin' });
-        if (adminExists) {
-            return res.status(400).send('O admin já existe.');
-        }
-        const hashedPassword = await bcrypt.hash('admin123', 10); // Senha temporária
-        const admin = new User({ username: 'admin', password: hashedPassword, role: 'admin', credits: 99999 });
-        await admin.save();
-        res.status(201).send('Admin criado com sucesso! Use o utilizador "admin" e a senha "admin123" para entrar. Apague esta rota agora!');
-    } catch (error) {
-        res.status(500).send('Erro ao criar admin.');
+// Rota de Login: [POST] /api/v2/auth/login
+apiV2Router.post('/auth/login', (req, res) => {
+    const { username, password } = req.body;
+    const user = MOCK_USERS.find(u => u.username.toLowerCase() === username.toLowerCase() && u.password === password);
+
+    if (user) {
+        // Login bem-sucedido: envia um token simulado e os dados do utilizador.
+        res.json({
+            token: 'dummy-auth-token-12345',
+            user: { id: user._id, username: user.username, role: user.role }
+        });
+    } else {
+        // Credenciais inválidas.
+        res.status(401).json({ message: 'Utilizador ou palavra-passe incorretos' });
     }
 });
 
+// A partir daqui, todas as rotas de clientes exigem autenticação.
+apiV2Router.use('/clients', authMiddleware);
+
+// Obter todos os clientes: [GET] /api/v2/clients
+apiV2Router.get('/clients', (req, res) => {
+    res.json(MOCK_CLIENTS);
+});
+
+// Criar um novo cliente: [POST] /api/v2/clients
+apiV2Router.post('/clients', (req, res) => {
+    const newClient = {
+        _id: crypto.randomUUID(), // Gera um ID único
+        ...req.body,
+        creationDate: new Date() // Define a data de criação
+    };
+    MOCK_CLIENTS.push(newClient);
+    res.status(201).json(newClient); // Responde com o cliente criado
+});
+
+// Atualizar um cliente existente: [PUT] /api/v2/clients/:id
+apiV2Router.put('/clients/:id', (req, res) => {
+    const { id } = req.params;
+    const index = MOCK_CLIENTS.findIndex(c => c._id === id);
+    if (index !== -1) {
+        // Atualiza o cliente na base de dados simulada
+        MOCK_CLIENTS[index] = { ...MOCK_CLIENTS[index], ...req.body };
+        res.json(MOCK_CLIENTS[index]); // Responde com o cliente atualizado
+    } else {
+        res.status(404).json({ message: 'Cliente não encontrado' });
+    }
+});
+
+// Apagar um cliente: [DELETE] /api/v2/clients/:id
+apiV2Router.delete('/clients/:id', (req, res) => {
+    const { id } = req.params;
+    const initialLength = MOCK_CLIENTS.length;
+    MOCK_CLIENTS = MOCK_CLIENTS.filter(c => c._id !== id);
+    
+    if (MOCK_CLIENTS.length < initialLength) {
+        res.json({ message: 'Cliente apagado com sucesso' });
+    } else {
+        res.status(404).json({ message: 'Cliente não encontrado' });
+    }
+});
+
+// Ligar o router da API v2 ao caminho /api/v2
+app.use('/api/v2', apiV2Router);
+
 
 // ==================================================================
-// == (NOVO!) CAMADA DE COMPATIBILIDADE PARA A APLICAÇÃO ANTIGA ==
+// == CAMADA DE COMPATIBILIDADE PARA APPS ANTIGAS ==
 // ==================================================================
-const apiCompatibilityRouter = express.Router();
 
-// NOVO: Adicionada a rota para a app Android
-apiCompatibilityRouter.get('/setting.php', (req, res) => {
-    console.log("Recebido pedido na rota de compatibilidade /api/setting.php");
+// Rota para Smart TV que envia dados para a raiz do servidor.
+app.post('/', (req, res) => {
+    console.log('Recebido um POST da Smart TV com os seguintes dados:', req.body);
+    res.status(200).json({ 
+        status: 'sucesso', 
+        message: 'Dados recebidos pelo servidor.',
+        dataRecebida: req.body 
+    });
+});
+
+// Rota para a App Android que espera um ficheiro .php
+app.get('/api/setting.php', (req, res) => {
     const settings = {
         "appName": "Gerencia App",
         "version": "1.2.5",
         "maintenanceMode": false,
         "welcomeMessage": "Bem-vindo à nossa aplicação!",
-        "apiUrl": "https://backend-kotlin-production.up.railway.app/api" // Manter /api para a app antiga
+        "apiUrl": "https://backend-kotlin-production.up.railway.app/api"
     };
     res.json(settings);
 });
 
 
-apiCompatibilityRouter.post('/guim.php', async (req, res) => {
-    console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    console.log("Corpo do pedido:", req.body); 
-    try {
-        const clients = await Client.find({ type: 'Usuario' });
-        res.json({
-            status: "success",
-            message: "Dados obtidos com sucesso",
-            data: clients
-        });
-    } catch (error) {
-        res.status(500).json({ status: "error", message: "Erro no servidor" });
-    }
+// 4. Iniciar o Servidor
+app.listen(PORT, () => {
+    console.log(`Servidor a correr na porta ${PORT}`);
 });
 
-apiCompatibilityRouter.use((req, res) => {
-    res.status(404).json({ status: "error", message: `Endpoint de compatibilidade não encontrado: ${req.originalUrl}` });
-});
-
-
-// ==================================================================
-// == ROTAS MODERNAS PARA O PAINEL HTML (JÁ EXISTENTES) ==
-// ==================================================================
-const modernApiRouter = express.Router();
-
-// --- ROTAS DE AUTENTICAÇÃO E UTILIZADORES ---
-modernApiRouter.post('/auth/login', async (req, res) => {
-    try {
-        const { username, password } = req.body;
-        const user = await User.findOne({ username: username.toLowerCase() });
-        if (!user) {
-            return res.status(404).json({ message: "Utilizador não encontrado" });
-        }
-        const isMatch = await bcrypt.compare(password, user.password);
-        if (!isMatch) {
-            return res.status(400).json({ message: "Palavra-passe incorreta" });
-        }
-        const token = jwt.sign(
-            { id: user._id, username: user.username, role: user.role },
-            process.env.JWT_SECRET || 'seu_segredo_super_secreto',
-            { expiresIn: '8h' }
-        );
-        res.json({ token, user: { id: user._id, username: user.username, role: user.role } });
-    } catch (error) {
-        res.status(500).json({ message: "Erro no servidor", error: error.message });
-    }
-});
-
-// --- ROTAS DE CLIENTES ---
-// Rota GET para todos os clientes, para simplificar o frontend.
-modernApiRouter.get('/clients', authMiddleware, async (req, res) => {
-    try {
-        const clients = await Client.find({}); // Busca todos os clientes
-        res.json(clients);
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-modernApiRouter.post('/clients', authMiddleware, async (req, res) => {
-    const client = new Client(req.body);
-    try {
-        const newClient = await client.save();
-        res.status(201).json(newClient);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
-    }
-});
-modernApiRouter.put('/clients/:id', authMiddleware, async (req, res) => {
-    try {
-        const updatedClient = await Client.findByIdAndUpdate(req.params.id, req.body, { new: true });
-        if (!updatedClient) return res.status(404).json({ message: 'Cliente não encontrado' });
-        res.json(updatedClient);
-    } catch (err) {
-        res.status(400).json({ message: err.message });
-    }
-});
-modernApiRouter.delete('/clients/:id', authMiddleware, async (req, res) => {
-    try {
-        const deletedClient = await Client.findByIdAndDelete(req.params.id);
-        if (!deletedClient) return res.status(404).json({ message: 'Cliente não encontrado' });
-        res.json({ message: 'Cliente apagado com sucesso' });
-    } catch (err) {
-        res.status(500).json({ message: err.message });
-    }
-});
-
-
-// (CORREÇÃO!) Ligar os routers na ordem correta: do mais específico para o mais geral.
-app.use('/api/v2', modernApiRouter); // A nova API para o painel é verificada primeiro.
-app.use('/api', apiCompatibilityRouter); // A API de compatibilidade é verificada depois.
-
-
-// Iniciar o Servidor
-const port = process.env.PORT || 3000;
-app.listen(port, () => {
-    console.log(`Servidor a correr na porta ${port}`);
-});
