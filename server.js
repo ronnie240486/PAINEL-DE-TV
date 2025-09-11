@@ -13,6 +13,13 @@ app.use(express.json());
 // Permite que o servidor entenda dados de formulários (comuns em APIs antigas)
 app.use(express.urlencoded({ extended: true }));
 
+// (NOVO!) Middleware de diagnóstico para registar todos os pedidos recebidos.
+// Isto vai ajudar-nos a ver exatamente que pedido a aplicação móvel está a fazer quando o erro acontece.
+app.use((req, res, next) => {
+    console.log(`[LOG] Pedido recebido: ${req.method} ${req.originalUrl} | User-Agent: ${req.headers['user-agent']}`);
+    next(); // Passa o pedido para a próxima etapa (a rota correta)
+});
+
 
 // 3. Ligar à Base de Dados MongoDB Atlas
 const mongoUri = process.env.MONGO_URI;
@@ -231,5 +238,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
-
 
