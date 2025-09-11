@@ -77,17 +77,22 @@ app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
     if (req.body && req.body.data) {
         try {
-            // CORREÇÃO 1: Limpa a string base64 antes de descodificar
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-            // CORREÇÃO 2: Remove caracteres de controlo/inválidos da string JSON resultante
-            const sanitizedJsonString = decodedString.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            const firstBracket = decodedString.indexOf('{');
+            const lastBracket = decodedString.lastIndexOf('}');
 
-            const decodedData = JSON.parse(sanitizedJsonString);
-            console.log('Dados descodificados da Smart TV:', decodedData);
+            if (firstBracket !== -1 && lastBracket > firstBracket) {
+                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+                const decodedData = JSON.parse(potentialJson);
+                console.log('Dados descodificados da Smart TV:', decodedData);
+            } else {
+                 console.warn('Não foi encontrado um objeto JSON válido nos dados da Smart TV.');
+            }
         } catch (error) {
-            console.error('Erro ao descodificar dados da Smart TV:', error.message);
+            console.error('Erro final ao processar dados da Smart TV:', error.message);
         }
     }
     res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
@@ -134,17 +139,22 @@ apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
      if (req.body && req.body.data) {
         try {
-            // CORREÇÃO 1: Limpa a string base64 antes de descodificar
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-            // CORREÇÃO 2: Remove caracteres de controlo/inválidos da string JSON resultante
-            const sanitizedJsonString = decodedString.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            const firstBracket = decodedString.indexOf('{');
+            const lastBracket = decodedString.lastIndexOf('}');
 
-            const decodedData = JSON.parse(sanitizedJsonString);
-            console.log('Dados descodificados da App (guim.php):', decodedData);
+            if (firstBracket !== -1 && lastBracket > firstBracket) {
+                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+                const decodedData = JSON.parse(potentialJson);
+                console.log('Dados descodificados da App (guim.php):', decodedData);
+            } else {
+                console.warn('Não foi encontrado um objeto JSON válido nos dados (guim.php).');
+            }
         } catch (error) {
-            console.error('Erro ao descodificar dados (guim.php):', error.message);
+            console.error('Erro final ao processar dados (guim.php):', error.message);
         }
     }
     try {
@@ -174,17 +184,22 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
     if (req.body && req.body.data) {
         try {
-            // CORREÇÃO 1: Limpa a string base64 antes de descodificar
             const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
             const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
 
-             // CORREÇÃO 2: Remove caracteres de controlo/inválidos da string JSON resultante
-            const sanitizedJsonString = decodedString.replace(/[\u0000-\u001F\u007F-\u009F]/g, "").trim();
+            // CORREÇÃO FINAL: Tenta extrair um JSON válido de uma string potencialmente "suja"
+            const firstBracket = decodedString.indexOf('{');
+            const lastBracket = decodedString.lastIndexOf('}');
 
-            const decodedData = JSON.parse(sanitizedJsonString);
-            console.log('Dados descodificados da App (v4/guim.php):', decodedData);
+            if (firstBracket !== -1 && lastBracket > firstBracket) {
+                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+                const decodedData = JSON.parse(potentialJson);
+                console.log('Dados descodificados da App (v4/guim.php):', decodedData);
+            } else {
+                console.warn('Não foi encontrado um objeto JSON válido nos dados (v4/guim.php).');
+            }
         } catch (error) {
-            console.error('Erro ao descodificar dados (v4/guim.php):', error.message);
+            console.error('Erro final ao processar dados (v4/guim.php):', error.message);
         }
     }
     try {
