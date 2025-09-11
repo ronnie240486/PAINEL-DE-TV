@@ -9,10 +9,17 @@ require('dotenv').config();
 // 2. Inicializar a aplicação Express
 const app = express();
 app.use(cors());
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+
+// (ATUALIZADO!) Adiciona um "saver" para o corpo cru do pedido em todos os parsers
+const rawBodySaver = (req, res, buf, encoding) => {
+  if (buf && buf.length) {
+    req.rawBody = buf.toString(encoding || 'utf8');
+  }
+};
+app.use(express.json({ verify: rawBodySaver }));
+app.use(express.urlencoded({ extended: true, verify: rawBodySaver }));
 // Mantendo o parser de texto, mas com lógica robusta para lidar com ele
-app.use(express.text({ type: '*/*' }));
+app.use(express.text({ type: '*/*', verify: rawBodySaver }));
 
 
 // Middleware de diagnóstico para registar todos os pedidos recebidos.
@@ -103,42 +110,7 @@ function decodeRequestBody(req) {
     if (!base64Data || typeof base64Data !== 'string') {
         console.warn("⚠️ Não foi possível extrair a string Base64 do corpo do pedido.");
         console.log("--- Fim da decodificação ---");
-        return null;
-    }
-
-    try {
-        const sanitizedBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
-        if (sanitizedBase64.length === 0) {
-            console.warn("⚠️ Dados Base64 estavam vazios após a limpeza.");
-            console.log("--- Fim da decodificação ---");
-            return null;
-        }
-
-        const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-        console.log("String decodificada (bruta):", decodedString);
-
-        // Limpeza agressiva final: remove todos os caracteres não imprimíveis
-        const cleanString = decodedString.replace(/[^\x20-\x7E]/g, '');
-        
-        const firstBracket = cleanString.indexOf('{');
-        const lastBracket = cleanString.lastIndexOf('}');
-
-        if (firstBracket !== -1 && lastBracket > firstBracket) {
-            const potentialJson = cleanString.substring(firstBracket, lastBracket + 1);
-            const jsonData = JSON.parse(potentialJson);
-            console.log("Dados decodificados com sucesso:", jsonData);
-            console.log("--- Fim da decodificação ---");
-            return jsonData;
-        } else {
-            console.warn("Nenhum objeto JSON válido encontrado na string decodificada e limpa.");
-            console.log("--- Fim da decodificação ---");
-            return null;
-        }
-    } catch (err) {
-        console.error("Erro final ao processar dados:", err.message);
-        console.log("--- Fim da decodificação ---");
-        return null;
-    }
+    return null;
 }
 
 
@@ -223,10 +195,40 @@ const apiV4CompatibilityRouter = express.Router();
 // Rota para a nova versão da app Android
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
-    const decodedData = decodeRequestBody(req);
+
+    // 🔹 Logs completos (igual ao guim.php normal)
+    console.log("[V4 HEADERS]", req.headers);
+    console.log("[V4 BODY parseado pelo Express]", req.body);
+    if (req.rawBody) {
+        console.log("[V4 BODY cru]", req.rawBody);
+    } else {
+        console.log("[V4 BODY cru] nada recebido.");
+    }
+
+    if (req.body && req.body.data) {
+        try {
+            const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
+            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+
+            const firstBracket = decodedString.indexOf('{');
+            const lastBracket = decodedString.lastIndexOf('}');
+
+            if (firstBracket !== -1 && lastBracket > firstBracket) {
+                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+                const decodedData = JSON.parse(cleanJson);
+                console.log('Dados descodificados da App (v4/guim.php):', decodedData);
+            } else {
+                console.warn('Nenhum JSON válido encontrado no data (v4/guim.php).');
+            }
+        } catch (error) {
+            console.error('Erro ao processar dados (v4/guim.php):', error.message);
+        }
+    } else {
+        console.warn("⚠️ Nenhum campo 'data' encontrado no body (v4/guim.php).");
+    }
 
     try {
-        // A lógica é a mesma da API de compatibilidade anterior
         const clients = await Client.find({ type: 'Usuario' });
         res.json({
             status: "success",
@@ -317,4 +319,5 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
+
 
