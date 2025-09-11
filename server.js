@@ -74,7 +74,7 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO UNIVERSAL E ROBUSTA PARA DECODIFICAR DADOS ---
+// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA COM CORREÇÃO DE BASE64 ---
 function decodeRequestBody(body) {
   let rawString;
 
@@ -82,10 +82,16 @@ function decodeRequestBody(body) {
     // Detecta V4 Base64
     if (body && body.data && typeof body.data === 'string') {
       // Remove caracteres inválidos do Base64
-      const sanitizedBase64 = body.data.replace(/[^A-Za-z0-9+/=]/g, '');
-      
+      let sanitized = body.data.replace(/[^A-Za-z0-9+/=]/g, '');
+
+      // Corrige padding Base64 (múltiplos de 4)
+      const paddingNeeded = 4 - (sanitized.length % 4);
+      if (paddingNeeded > 0 && paddingNeeded < 4) {
+        sanitized += '='.repeat(paddingNeeded);
+      }
+
       try {
-        rawString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+        rawString = Buffer.from(sanitized, 'base64').toString('utf8');
       } catch (err) {
         console.warn('Falha ao decodificar Base64, usando string bruta:', err.message);
         rawString = body.data;
@@ -95,7 +101,7 @@ function decodeRequestBody(body) {
       rawString = JSON.stringify(body);
     }
 
-    // Regex para extrair o primeiro objeto JSON válido
+    // Extrai o primeiro objeto JSON válido da string
     const jsonMatch = rawString.match(/\{.*\}/s);
     if (!jsonMatch) {
       console.warn('Nenhum objeto JSON válido encontrado na string decodificada.');
@@ -210,6 +216,16 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     if (!decodedData) {
         // Fallback de compatibilidade: responde com sucesso e lista de clientes para não quebrar a app
         console.warn("Decodificação falhou na V4, respondendo com lista de clientes para compatibilidade.");
+        try {
+            const clients = await Client.find({ type: 'Usuario' });
+            return res.json({
+                status: "success",
+                message: "Dados recebidos inválidos, retornando lista completa.",
+                data: clients
+            });
+        } catch (error) {
+            return res.status(500).json({ status: "error", message: "Erro no servidor (v4)" });
+        }
     }
 
     try {
@@ -285,7 +301,7 @@ modernApiRouter.put('/clients/:id', authMiddleware, async (req, res) => {
 modernApiRouter.delete('/clients/:id', authMiddleware, async (req, res) => {
     try {
         const deletedClient = await Client.findByIdAndDelete(req.params.id);
-        if (!deletedClient) return res.status(4e4).json({ message: 'Cliente não encontrado' });
+        if (!deletedClient) return res.status(40400).json({ message: 'Cliente não encontrado' });
         res.json({ message: 'Cliente apagado com sucesso' });
     } catch (err) {
         res.status(500).json({ message: err.message });
