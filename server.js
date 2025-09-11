@@ -75,14 +75,17 @@ app.get('/', (req, res) => {
 // Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
-    // (NOVO!) Descodifica os dados recebidos da aplicação
     if (req.body && req.body.data) {
         try {
-            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            // CORREÇÃO: Limpa a string base64 antes de descodificar
+            const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
+            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+            console.log('String descodificada da Smart TV (bruta):', decodedString);
             const decodedData = JSON.parse(decodedString);
             console.log('Dados descodificados da Smart TV:', decodedData);
         } catch (error) {
-            console.error('Erro ao descodificar dados da Smart TV:', error);
+            console.error('Erro ao descodificar dados da Smart TV:', error.message);
+            console.error('Dados originais (Smart TV) que causaram o erro:', req.body.data);
         }
     }
     res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
@@ -127,14 +130,17 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    // (NOVO!) Descodifica os dados recebidos da aplicação
      if (req.body && req.body.data) {
         try {
-            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            // CORREÇÃO: Limpa a string base64 antes de descodificar
+            const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
+            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+            console.log('String descodificada (guim.php, bruta):', decodedString);
             const decodedData = JSON.parse(decodedString);
             console.log('Dados descodificados da App (guim.php):', decodedData);
         } catch (error) {
-            console.error('Erro ao descodificar dados (guim.php):', error);
+            console.error('Erro ao descodificar dados (guim.php):', error.message);
+            console.error('Dados originais (guim.php) que causaram o erro:', req.body.data);
         }
     }
     try {
@@ -162,14 +168,17 @@ const apiV4CompatibilityRouter = express.Router();
 // Rota para a nova versão da app Android
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
-    // (NOVO!) Descodifica os dados recebidos da aplicação
     if (req.body && req.body.data) {
         try {
-            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            // CORREÇÃO: Limpa a string base64 antes de descodificar
+            const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
+            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+            console.log('String descodificada (v4/guim.php, bruta):', decodedString);
             const decodedData = JSON.parse(decodedString);
             console.log('Dados descodificados da App (v4/guim.php):', decodedData);
         } catch (error) {
-            console.error('Erro ao descodificar dados (v4/guim.php):', error);
+            console.error('Erro ao descodificar dados (v4/guim.php):', error.message);
+            console.error('Dados originais (v4/guim.php) que causaram o erro:', req.body.data);
         }
     }
     try {
