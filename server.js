@@ -74,77 +74,37 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (ATUALIZADO!) FUNÇÃO CENTRALIZADA E ROBUSTA PARA DECODIFICAR PEDIDOS ---
-function decodeRequestBody(req) {
-    let base64Data = null;
+// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA PARA DECODIFICAR DADOS ---
+function decodeAndParseBody(rawBody) {
+  try {
+    let dataStr;
 
-    // Logs de depuração para entender o que está a ser recebido
-    console.log("--- Iniciando decodificação ---");
-    console.log("Content-Type:", req.headers['content-type']);
-
-    // Etapa 1: Extrair a string Base64 do corpo do pedido, independentemente do formato.
-    if (typeof req.body === 'object' && req.body !== null && req.body.data) {
-        base64Data = req.body.data;
-    } else if (typeof req.body === 'string') {
-         // Tenta extrair de um formato 'data=...' ou de um JSON mal interpretado como texto.
-        if (req.body.startsWith('data=')) {
-            base64Data = req.body.substring(5);
-        } else {
-            try {
-                const parsedBody = JSON.parse(req.body);
-                if (parsedBody && parsedBody.data) {
-                    base64Data = parsedBody.data;
-                }
-            } catch (e) {
-                // Se não for JSON, assume que o corpo inteiro é a string Base64.
-                base64Data = req.body;
-            }
-        }
+    // Caso 1: Vem no formato { data: "..." }
+    if (rawBody && rawBody.data) {
+      // Sanitiza Base64: remove caracteres inválidos
+      const sanitized = String(rawBody.data).replace(/[^A-Za-z0-9+/=]/g, '');
+      // Decodifica Base64 para UTF-8
+      dataStr = Buffer.from(sanitized, 'base64').toString('utf8');
+    } else {
+      // Caso 2: Vem JSON puro (sem o wrapper "data")
+      dataStr = JSON.stringify(rawBody);
     }
 
-    if (!base64Data || typeof base64Data !== 'string') {
-        console.warn("⚠️ Não foi possível extrair a string Base64 do corpo do pedido.");
-        console.log("--- Fim da decodificação ---");
-        return null;
-    }
-
+    // Tenta fazer parse JSON do conteúdo decodificado
     try {
-        // Etapa 2: Limpeza rigorosa da string Base64.
-        const sanitizedBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
-        if (sanitizedBase64.length === 0) {
-            console.warn("⚠️ Dados Base64 estavam vazios após a limpeza.");
-            console.log("--- Fim da decodificação ---");
-            return null;
-        }
-
-        // Etapa 3: Decodificar para uma string.
-        const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-        console.log("String decodificada (bruta):", decodedString);
-
-        // Etapa 4 (NOVA LÓGICA): Limpeza agressiva e extração de JSON
-        // Remove todos os caracteres que não são ASCII imprimíveis (mantém o básico para JSON)
-        const cleanString = decodedString.replace(/[^\x20-\x7E]/g, '');
-
-        const firstBracket = cleanString.indexOf('{');
-        const lastBracket = cleanString.lastIndexOf('}');
-
-        if (firstBracket !== -1 && lastBracket > firstBracket) {
-            const potentialJson = cleanString.substring(firstBracket, lastBracket + 1);
-            
-            const jsonData = JSON.parse(potentialJson);
-            console.log("Dados decodificados com sucesso:", jsonData);
-            console.log("--- Fim da decodificação ---");
-            return jsonData;
-        } else {
-            console.warn("Nenhum objeto JSON válido encontrado na string decodificada e limpa.");
-            console.log("--- Fim da decodificação ---");
-            return null;
-        }
-    } catch (err) {
-        console.error("Erro final ao processar dados:", err.message);
-        console.log("--- Fim da decodificação ---");
-        return null;
+      // Limpeza final de caracteres de controlo antes do parse
+      const cleanJson = dataStr.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
+      const json = JSON.parse(cleanJson);
+      console.log('Dados decodificados com sucesso:', json);
+      return json;
+    } catch (parseErr) {
+      console.warn('JSON inválido após decodificação:', parseErr.message);
+      return null;
     }
+  } catch (err) {
+    console.error('Erro ao processar dados:', err.message);
+    return null;
+  }
 }
 
 
@@ -158,9 +118,11 @@ app.get('/', (req, res) => {
 // Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
-    const decodedData = decodeRequestBody(req);
-    // Responde sempre com sucesso para a app não dar erro de rede, mesmo que a decodificação falhe.
-    res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
+    const decodedData = decodeAndParseBody(req.body);
+    if (!decodedData) {
+        return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
+    }
+    res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.', received: decodedData });
 });
 
 
@@ -202,7 +164,13 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    const decodedData = decodeRequestBody(req);
+    const decodedData = decodeAndParseBody(req.body);
+    
+    if (!decodedData) {
+        // Mesmo que a decodificação falhe, a app antiga pode esperar uma lista de clientes vazia.
+        // Respondemos com sucesso mas com dados vazios para não quebrar a app.
+        console.warn("Decodificação falhou, respondendo com lista de clientes vazia para compatibilidade.");
+    }
 
     try {
         const clients = await Client.find({ type: 'Usuario' });
@@ -229,25 +197,19 @@ const apiV4CompatibilityRouter = express.Router();
 // Rota para a nova versão da app Android
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
-
-    // 🔹 Logs completos (igual ao guim.php normal)
-    console.log("[V4 HEADERS]", req.headers);
-    console.log("[V4 BODY parseado pelo Express]", req.body);
-    if (req.rawBody) {
-        console.log("[V4 BODY cru]", req.rawBody);
-    } else {
-        console.log("[V4 BODY cru] nada recebido.");
-    }
     
-    // Chama a função de decodificação centralizada
-    const decodedData = decodeRequestBody(req);
+    const decodedData = decodeAndParseBody(req.body);
+    if (!decodedData) {
+        return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
+    }
 
     try {
         const clients = await Client.find({ type: 'Usuario' });
         res.json({
             status: "success",
             message: "Dados obtidos com sucesso (v4)",
-            data: clients
+            data: clients,
+            received: decodedData // Opcional: devolver o que foi recebido para depuração
         });
     } catch (error) {
         res.status(500).json({ status: "error", message: "Erro no servidor (v4)" });
@@ -333,7 +295,4 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
-
-
-
 
