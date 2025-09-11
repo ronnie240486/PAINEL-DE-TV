@@ -74,45 +74,45 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVA FUNÇÃO!) FUNÇÃO ROBUSTA MELHORADA PARA DECODIFICAR DADOS ---
-function decodeAndParseBody(rawBody) {
-  try {
-    let dataStr;
+// --- (NOVA FUNÇÃO!) FUNÇÃO UNIVERSAL E ROBUSTA PARA DECODIFICAR DADOS ---
+function decodeRequestBody(body) {
+  let rawString;
 
-    if (rawBody && rawBody.data) {
-      // Limpa caracteres não-Base64
-      const sanitized = String(rawBody.data).replace(/[^A-Za-z0-9+/=]+/g, '');
+  try {
+    // Detecta V4 Base64
+    if (body && body.data && typeof body.data === 'string') {
+      // Remove caracteres inválidos do Base64
+      const sanitizedBase64 = body.data.replace(/[^A-Za-z0-9+/=]/g, '');
       
-      // Tenta decodificar Base64
       try {
-        dataStr = Buffer.from(sanitized, 'base64').toString('utf8');
+        rawString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
       } catch (err) {
-        console.warn('Erro ao decodificar Base64, tentando string bruta...', err.message);
-        dataStr = rawBody.data; // Usa o dado bruto como fallback
+        console.warn('Falha ao decodificar Base64, usando string bruta:', err.message);
+        rawString = body.data;
       }
     } else {
-      // Se não houver campo 'data', trata o corpo todo como JSON
-      dataStr = JSON.stringify(rawBody);
+      // JSON puro: converte para string para processar
+      rawString = JSON.stringify(body);
     }
 
-    // Extrai o primeiro objeto JSON válido da string (ignora lixo no início ou no final)
-    const firstJsonMatch = dataStr.match(/\{.*\}/s);
-    if (!firstJsonMatch) {
+    // Regex para extrair o primeiro objeto JSON válido
+    const jsonMatch = rawString.match(/\{.*\}/s);
+    if (!jsonMatch) {
       console.warn('Nenhum objeto JSON válido encontrado na string decodificada.');
       return null;
     }
 
-    // Parse seguro do JSON extraído
+    // Parse seguro do JSON
     try {
-      const json = JSON.parse(firstJsonMatch[0]);
-      console.log('Dados decodificados com sucesso:', json);
-      return json;
+      const parsed = JSON.parse(jsonMatch[0]);
+      console.log('Dados decodificados com sucesso:', parsed);
+      return parsed;
     } catch (parseErr) {
-      console.warn('JSON inválido após extração:', parseErr.message);
+      console.warn('Erro ao fazer JSON.parse:', parseErr.message);
       return null;
     }
   } catch (err) {
-    console.error('Erro geral ao processar dados:', err.message);
+    console.error('Erro inesperado ao processar o corpo da requisição:', err.message);
     return null;
   }
 }
@@ -128,7 +128,7 @@ app.get('/', (req, res) => {
 // Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
     console.log('Recebido POST da Smart TV na raiz do servidor.');
-    const decodedData = decodeAndParseBody(req.body);
+    const decodedData = decodeRequestBody(req.body);
     if (!decodedData) {
         return res.status(400).json({ error: 'JSON inválido ou dados corrompidos' });
     }
@@ -174,7 +174,7 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    const decodedData = decodeAndParseBody(req.body);
+    const decodedData = decodeRequestBody(req.body);
     
     if (!decodedData) {
         console.warn("Decodificação falhou, respondendo com lista de clientes para compatibilidade.");
@@ -206,7 +206,7 @@ const apiV4CompatibilityRouter = express.Router();
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
     
-    const decodedData = decodeAndParseBody(req.body);
+    const decodedData = decodeRequestBody(req.body);
     if (!decodedData) {
         // Fallback de compatibilidade: responde com sucesso e lista de clientes para não quebrar a app
         console.warn("Decodificação falhou na V4, respondendo com lista de clientes para compatibilidade.");
