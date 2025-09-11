@@ -74,34 +74,29 @@ const authMiddleware = (req, res, next) => {
     });
 };
 
-// --- (NOVO!) FUNÇÃO CENTRALIZADA PARA DECODIFICAR PEDIDOS ---
+// --- (ATUALIZADO!) FUNÇÃO CENTRALIZADA E ROBUSTA PARA DECODIFICAR PEDIDOS ---
 function decodeRequestBody(req) {
     let base64Data = null;
 
     // Logs de depuração para entender o que está a ser recebido
     console.log("--- Iniciando decodificação ---");
     console.log("Content-Type:", req.headers['content-type']);
-    console.log("Corpo do pedido (tipo):", typeof req.body);
-    // console.log("Corpo do pedido (conteúdo):", req.body); // Descomente para ver o conteúdo completo
 
+    // Etapa 1: Extrair a string Base64 do corpo do pedido, independentemente do formato.
     if (typeof req.body === 'object' && req.body !== null && req.body.data) {
-        // Caso 1: Corpo JSON ou urlencoded como { data: "..." }
         base64Data = req.body.data;
     } else if (typeof req.body === 'string') {
-        // Caso 2: Corpo como texto simples
+         // Tenta extrair de um formato 'data=...' ou de um JSON mal interpretado como texto.
         if (req.body.startsWith('data=')) {
-            base64Data = req.body.substring(5); // Remove "data="
+            base64Data = req.body.substring(5);
         } else {
-             // Tenta analisar a string como JSON para o caso de ter sido mal interpretada como texto
             try {
                 const parsedBody = JSON.parse(req.body);
                 if (parsedBody && parsedBody.data) {
                     base64Data = parsedBody.data;
-                } else {
-                     base64Data = req.body;
                 }
             } catch (e) {
-                // Não é um JSON, assume que a string inteira é o dado
+                // Se não for JSON, assume que o corpo inteiro é a string Base64.
                 base64Data = req.body;
             }
         }
@@ -110,7 +105,46 @@ function decodeRequestBody(req) {
     if (!base64Data || typeof base64Data !== 'string') {
         console.warn("⚠️ Não foi possível extrair a string Base64 do corpo do pedido.");
         console.log("--- Fim da decodificação ---");
-    return null;
+        return null;
+    }
+
+    try {
+        // Etapa 2: Limpeza rigorosa da string Base64.
+        const sanitizedBase64 = base64Data.replace(/[^A-Za-z0-9+/=]/g, '');
+        if (sanitizedBase64.length === 0) {
+            console.warn("⚠️ Dados Base64 estavam vazios após a limpeza.");
+            console.log("--- Fim da decodificação ---");
+            return null;
+        }
+
+        // Etapa 3: Decodificar para uma string.
+        const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
+        console.log("String decodificada (bruta):", decodedString);
+
+        // Etapa 4: Extrair a porção que se parece com JSON.
+        const firstBracket = decodedString.indexOf('{');
+        const lastBracket = decodedString.lastIndexOf('}');
+
+        if (firstBracket !== -1 && lastBracket > firstBracket) {
+            const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
+            
+            // Etapa 5: Limpeza "cirúrgica" final, removendo caracteres de controlo inválidos.
+            const cleanJson = potentialJson.replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F-\u009F\uFFFD]/g, '');
+            
+            const jsonData = JSON.parse(cleanJson);
+            console.log("Dados decodificados com sucesso:", jsonData);
+            console.log("--- Fim da decodificação ---");
+            return jsonData;
+        } else {
+            console.warn("Nenhum objeto JSON válido encontrado na string decodificada.");
+            console.log("--- Fim da decodificação ---");
+            return null;
+        }
+    } catch (err) {
+        console.error("Erro final ao processar dados:", err.message);
+        console.log("--- Fim da decodificação ---");
+        return null;
+    }
 }
 
 
@@ -204,29 +238,9 @@ apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     } else {
         console.log("[V4 BODY cru] nada recebido.");
     }
-
-    if (req.body && req.body.data) {
-        try {
-            const sanitizedBase64 = req.body.data.replace(/[^A-Za-z0-9+/=]/g, '');
-            const decodedString = Buffer.from(sanitizedBase64, 'base64').toString('utf8');
-
-            const firstBracket = decodedString.indexOf('{');
-            const lastBracket = decodedString.lastIndexOf('}');
-
-            if (firstBracket !== -1 && lastBracket > firstBracket) {
-                const potentialJson = decodedString.substring(firstBracket, lastBracket + 1);
-                const cleanJson = potentialJson.replace(/[\u0000-\u001F\u007F-\u009F]/g, '');
-                const decodedData = JSON.parse(cleanJson);
-                console.log('Dados descodificados da App (v4/guim.php):', decodedData);
-            } else {
-                console.warn('Nenhum JSON válido encontrado no data (v4/guim.php).');
-            }
-        } catch (error) {
-            console.error('Erro ao processar dados (v4/guim.php):', error.message);
-        }
-    } else {
-        console.warn("⚠️ Nenhum campo 'data' encontrado no body (v4/guim.php).");
-    }
+    
+    // Chama a função de decodificação centralizada
+    const decodedData = decodeRequestBody(req);
 
     try {
         const clients = await Client.find({ type: 'Usuario' });
@@ -319,5 +333,6 @@ const port = process.env.PORT || 3000;
 app.listen(port, () => {
     console.log(`Servidor a correr na porta ${port}`);
 });
+
 
 
