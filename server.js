@@ -13,8 +13,7 @@ app.use(express.json());
 // Permite que o servidor entenda dados de formulários (comuns em APIs antigas)
 app.use(express.urlencoded({ extended: true }));
 
-// (NOVO!) Middleware de diagnóstico para registar todos os pedidos recebidos.
-// Isto vai ajudar-nos a ver exatamente que pedido a aplicação móvel está a fazer quando o erro acontece.
+// Middleware de diagnóstico para registar todos os pedidos recebidos.
 app.use((req, res, next) => {
     console.log(`[LOG] Pedido recebido: ${req.method} ${req.originalUrl} | User-Agent: ${req.headers['user-agent']}`);
     next(); // Passa o pedido para a próxima etapa (a rota correta)
@@ -73,10 +72,19 @@ app.get('/', (req, res) => {
     res.status(200).json({ status: 'ok', message: 'Backend do Gerencia App a funcionar!' });
 });
 
-// (NOVO!) Rota para receber POSTs da Smart TV
+// Rota para receber POSTs da Smart TV
 app.post('/', (req, res) => {
-    console.log('Recebido POST da Smart TV na raiz do servidor. Corpo do pedido:', req.body);
-    // Apenas confirma o recebimento. A lógica de processamento pode ser adicionada aqui.
+    console.log('Recebido POST da Smart TV na raiz do servidor.');
+    // (NOVO!) Descodifica os dados recebidos da aplicação
+    if (req.body && req.body.data) {
+        try {
+            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            const decodedData = JSON.parse(decodedString);
+            console.log('Dados descodificados da Smart TV:', decodedData);
+        } catch (error) {
+            console.error('Erro ao descodificar dados da Smart TV:', error);
+        }
+    }
     res.status(200).json({ status: 'success', message: 'Dados recebidos pelo servidor.' });
 });
 
@@ -119,7 +127,16 @@ apiCompatibilityRouter.get('/setting.php', (req, res) => {
 
 apiCompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade /api/guim.php");
-    console.log("Corpo do pedido:", req.body); 
+    // (NOVO!) Descodifica os dados recebidos da aplicação
+     if (req.body && req.body.data) {
+        try {
+            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            const decodedData = JSON.parse(decodedString);
+            console.log('Dados descodificados da App (guim.php):', decodedData);
+        } catch (error) {
+            console.error('Erro ao descodificar dados (guim.php):', error);
+        }
+    }
     try {
         const clients = await Client.find({ type: 'Usuario' });
         res.json({
@@ -138,14 +155,23 @@ apiCompatibilityRouter.use((req, res) => {
 
 
 // ==================================================================
-// == (NOVO!) CAMADA DE COMPATIBILIDADE V4 PARA A APLICAÇÃO ANDROID ==
+// == CAMADA DE COMPATIBILIDADE V4 PARA A APLICAÇÃO ANDROID ==
 // ==================================================================
 const apiV4CompatibilityRouter = express.Router();
 
-// NOVO: Adicionada a rota para a nova versão da app Android
+// Rota para a nova versão da app Android
 apiV4CompatibilityRouter.post('/guim.php', async (req, res) => {
     console.log("Recebido pedido na rota de compatibilidade V4 /api/v4/guim.php");
-    console.log("Corpo do pedido:", req.body);
+    // (NOVO!) Descodifica os dados recebidos da aplicação
+    if (req.body && req.body.data) {
+        try {
+            const decodedString = Buffer.from(req.body.data, 'base64').toString('utf8');
+            const decodedData = JSON.parse(decodedString);
+            console.log('Dados descodificados da App (v4/guim.php):', decodedData);
+        } catch (error) {
+            console.error('Erro ao descodificar dados (v4/guim.php):', error);
+        }
+    }
     try {
         // A lógica é a mesma da API de compatibilidade anterior
         const clients = await Client.find({ type: 'Usuario' });
@@ -227,9 +253,9 @@ modernApiRouter.delete('/clients/:id', authMiddleware, async (req, res) => {
 });
 
 
-// (CORREÇÃO!) Ligar os routers na ordem correta: do mais específico para o mais geral.
+// Ligar os routers na ordem correta: do mais específico para o mais geral.
 app.use('/api/v2', modernApiRouter); // A nova API para o painel é verificada primeiro.
-app.use('/api/v4', apiV4CompatibilityRouter); // A NOVA API v4 para a app Android
+app.use('/api/v4', apiV4CompatibilityRouter); // A API v4 para a app Android
 app.use('/api', apiCompatibilityRouter); // A API de compatibilidade é verificada depois.
 
 
